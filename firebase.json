@@ -1,0 +1,24 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      ".*/**",
+      ".git/**",
+      ".next/**",
+      ".firebase/**",
+      "**/node_modules/**",
+      "app/**",
+      "components/**",
+      "contexts/**",
+      "lib/**",
+      "prisma/**",
+      "scripts/**",
+      "test/**",
+      "*.ts",
+      "*.mjs",
+      "*.log"
+    ]
+  }
+}

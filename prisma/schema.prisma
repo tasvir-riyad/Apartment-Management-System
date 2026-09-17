@@ -1,0 +1,247 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String     @id @default(cuid())
+  role               String     @default("TENANT") // SUPER_ADMIN, ADMIN, TENANT
+  username           String     @unique // email/username for Admin, flat code (e.g. B2) for Tenant
+  email              String?    @unique
+  passwordHash       String
+  flatId             String?
+  flat               Flat?      @relation(fields: [flatId], references: [id])
+  isActive           Boolean    @default(true)
+  mustChangePassword Boolean    @default(false)
+  lastLoginAt        DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  auditLogs          AuditLog[]
+  paymentsReceived   Payment[]  @relation("ReceivedBy")
+}
+
+model Floor {
+  id         String   @id @default(cuid())
+  level      Int      @unique // 1 (Ground Floor) to 8 (Rooftop)
+  labelEn    String
+  labelBn    String
+  hasParking Boolean  @default(false)
+  isRooftop  Boolean  @default(false)
+  flats      Flat[]
+}
+
+model Flat {
+  id                  String               @id @default(cuid())
+  code                String               @unique // A1, A2, B1, B2, C1... E2-E3
+  floorId             String
+  floor               Floor                @relation(fields: [floorId], references: [id])
+  type                String               @default("STANDARD") // STANDARD, BACHELOR, COMPACT, OWNER
+  baseRent            Float
+  liftFee             Float                @default(0) // Admin manual lift fee setting (default 0)
+  bedrooms            Int                  @default(2)
+  bathrooms           Int                  @default(2)
+  sizeSqft            Float?
+  status              String               @default("VACANT") // VACANT, OCCUPIED, OWNER_OCCUPIED, UNDER_MAINTENANCE
+  notes               String?
+  users               User[]
+  tenants             Tenant[]
+  leases              Lease[]
+  rentCharges         RentCharge[]
+  extraCharges        ExtraCharge[]
+  payments            Payment[]
+  documents           Document[]
+  vehicles            Vehicle[]
+  maintenanceRequests MaintenanceRequest[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+}
+
+model Tenant {
+  id                    String     @id @default(cuid())
+  flatId                String
+  flat                  Flat       @relation(fields: [flatId], references: [id])
+  fullNameBn            String
+  fullNameEn            String
+  nationalId            String?
+  phone                 String
+  altPhone              String?
+  email                 String?
+  photoUrl              String?
+  occupation            String?
+  permanentAddress      String?
+  familyMembersCount    Int        @default(1)
+  moveInDate            DateTime
+  moveOutDate           DateTime?
+  isActive              Boolean    @default(true)
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  leases                Lease[]
+  documents             Document[]
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+}
+
+model Lease {
+  id              String       @id @default(cuid())
+  flatId          String
+  flat            Flat         @relation(fields: [flatId], references: [id])
+  tenantId        String
+  tenant          Tenant       @relation(fields: [tenantId], references: [id])
+  startDate       DateTime
+  endDate         DateTime?
+  monthlyRent     Float        // Snapshot of base rent
+  monthlyLiftFee  Float        @default(0) // Snapshot of flat's lift fee
+  securityDeposit Float        @default(0)
+  advanceMonths   Int          @default(0)
+  status          String       @default("ACTIVE") // ACTIVE, TERMINATED, EXPIRED
+  rentCharges     RentCharge[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model RentCharge {
+  id          String       @id @default(cuid())
+  flatId      String
+  flat        Flat         @relation(fields: [flatId], references: [id])
+  leaseId     String?
+  lease       Lease?       @relation(fields: [leaseId], references: [id])
+  month       String       // Format: YYYY-MM
+  rentAmount  Float        // Base rent portion
+  liftAmount  Float        @default(0) // Lift charge portion
+  amount      Float        // Total monthly charge (rent + lift)
+  dueDate     DateTime
+  status      String       @default("UNPAID") // UNPAID, PARTIAL, PAID, WAIVED
+  paidAmount  Float        @default(0)
+  generatedAt DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([flatId, month])
+}
+
+model ExtraCharge {
+  id          String   @id @default(cuid())
+  flatId      String
+  flat        Flat     @relation(fields: [flatId], references: [id])
+  month       String   // Format: YYYY-MM
+  category    String   @default("OTHER") // LIFT, UTILITY, WATER, GAS, SERVICE, MAINTENANCE, GUARD, FINE, OTHER
+  label       String
+  amount      Float
+  isRecurring Boolean  @default(false)
+  notes       String?
+  status      String   @default("UNPAID") // UNPAID, PARTIAL, PAID, WAIVED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Payment {
+  id               String   @id @default(cuid())
+  flatId           String
+  flat             Flat     @relation(fields: [flatId], references: [id])
+  month            String   // Billing month YYYY-MM
+  amount           Float
+  paidOn           DateTime
+  method           String   @default("CASH") // CASH, BKASH, NAGAD, ROCKET, BANK_TRANSFER, CHEQUE, OTHER
+  referenceNo      String?
+  receiptNo        String   @unique
+  receivedByUserId String?
+  receivedByUser   User?    @relation("ReceivedBy", fields: [receivedByUserId], references: [id])
+  attachmentUrl    String?
+  status           String   @default("APPROVED") // PENDING, APPROVED, REJECTED
+  notes            String?
+  isDeleted        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Document {
+  id         String   @id @default(cuid())
+  tenantId   String?
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id])
+  flatId     String?
+  flat       Flat?    @relation(fields: [flatId], references: [id])
+  type       String   // NID_FRONT, NID_BACK, PHOTO, POLICE_VERIFICATION, AGREEMENT, OTHER
+  fileUrl    String
+  fileName   String
+  mimeType   String?
+  sizeBytes  Int?
+  status     String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  reviewedBy String?
+  reviewNote String?
+  uploadedAt DateTime @default(now())
+}
+
+model Vehicle {
+  id             String   @id @default(cuid())
+  flatId         String
+  flat           Flat     @relation(fields: [flatId], references: [id])
+  slotLabel      String?
+  vehicleType    String   // CAR, MOTORCYCLE, BICYCLE, CNG, OTHER
+  brandModel     String?
+  registrationNo String
+  color          String?
+  ownerName      String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Notification {
+  id            String   @id @default(cuid())
+  recipientType String   // ADMIN, TENANT
+  recipientId   String?  // Flat code or user ID
+  channel       String   @default("IN_APP") // IN_APP, EMAIL, SMS
+  title         String
+  body          String
+  type          String   // RENT_DUE, OVERDUE, HIGH_DUE_ALERT, PAYMENT_RECEIVED, NOTICE, SYSTEM
+  isRead        Boolean  @default(false)
+  sentAt        DateTime @default(now())
+}
+
+model Notice {
+  id          String    @id @default(cuid())
+  titleBn     String
+  titleEn     String
+  body        String
+  audience    String    @default("ALL") // ALL, FLOOR, SPECIFIC_FLATS
+  targetFloor Int?
+  publishedAt DateTime  @default(now())
+  expiresAt   DateTime?
+  isPinned    Boolean   @default(false)
+}
+
+model MaintenanceRequest {
+  id          String    @id @default(cuid())
+  flatId      String
+  flat        Flat      @relation(fields: [flatId], references: [id])
+  title       String
+  description String
+  priority    String    @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+  status      String    @default("OPEN")   // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  photoUrl    String?
+  adminNote   String?
+  createdAt   DateTime  @default(now())
+  resolvedAt  DateTime?
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  details   String?  // JSON string
+  ipAddress String?
+  createdAt DateTime @default(now())
+}

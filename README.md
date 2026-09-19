@@ -1,4 +1,4 @@
-# 🏢 Apartment Management System (সাঈদী টাওয়ার — Sayedi Tower)
+# 🏢 Apartment Management System 
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.3.5-black?style=flat&logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.2-blue?style=flat&logo=react)](https://react.dev/)
@@ -37,11 +37,7 @@ A modern, production-grade, full-stack **Apartment and Property Management Syste
 - Real-time ledger view: rent breakdown, lift charges, extra utility bills, payment history, and downloadable PDF receipts.
 - Payment notice submission and digital maintenance requests.
 
-### 6. 🚗 Resident Vehicle & Parking Registry
-- Dedicated registry for ground-floor free parking.
-- Tracks slot numbers, vehicle types (motorcycle, car, bicycle), and license plate numbers.
-
-### 7. 🌐 Seamless Bilingual Support
+### 6. 🌐 Seamless Bilingual Support
 - Built-in dynamic language switcher for **বাংলা (Bengali)** and **English**.
 - Bengali typography powered by `Hind Siliguri` and English powered by `Inter`.
 

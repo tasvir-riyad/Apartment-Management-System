@@ -182,4 +182,4 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## 📄 License & Ownership
 
-Designed and maintained for **Sayedi Tower (সাঈদী টাওয়ার)**. All rights reserved.
+Designed and maintained for **Sayedi Tower (সাঈদী টাওয়ার)**.

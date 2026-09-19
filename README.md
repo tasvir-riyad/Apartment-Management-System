@@ -106,7 +106,7 @@ CRON_SECRET="your_cron_secret_token_here"
 NEXT_PUBLIC_APP_NAME="Sayedi Tower"
 ```
 
-> **Note:** `.env` and `node_modules` are excluded from version control via `.gitignore`. Never commit your live credentials!
+> **Note:** `.env` and `node_modules` are excluded from version control via `.gitignore`!
 
 ### 4. Setup the Database
 Push the Prisma schema to create the tables in your PostgreSQL database:

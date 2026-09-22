@@ -94,6 +94,7 @@ export async function POST(req: Request) {
         startDate: new Date(moveInDate),
         monthlyRent: flat.baseRent,
         monthlyLiftFee: flat.liftFee,
+        securityDeposit: Number(body.advanceAmount || body.securityDeposit || 0),
         status: 'ACTIVE',
       },
     });
@@ -244,6 +245,8 @@ export async function PUT(req: Request) {
       familyMembersCount,
       moveInDate,
       moveOutDate,
+      advanceAmount,
+      securityDeposit,
       isActive,
     } = body;
 
@@ -289,6 +292,7 @@ export async function PUT(req: Request) {
         });
 
         // Create active lease for new tenant
+        const depositVal = Number(advanceAmount !== undefined ? advanceAmount : (securityDeposit || 0));
         await prisma.lease.create({
           data: {
             flatId,
@@ -296,6 +300,7 @@ export async function PUT(req: Request) {
             startDate: effectiveMoveInDate,
             monthlyRent: flat.baseRent,
             monthlyLiftFee: flat.liftFee,
+            securityDeposit: depositVal,
             status: 'ACTIVE',
           },
         });
@@ -363,6 +368,32 @@ export async function PUT(req: Request) {
       data: updatedData,
       include: { flat: true },
     });
+
+    if (advanceAmount !== undefined || securityDeposit !== undefined) {
+      const depositVal = Number(advanceAmount !== undefined ? advanceAmount : securityDeposit) || 0;
+      const activeLease = await prisma.lease.findFirst({
+        where: { tenantId: targetTenant.id, status: 'ACTIVE' },
+      });
+      if (activeLease) {
+        await prisma.lease.update({
+          where: { id: activeLease.id },
+          data: { securityDeposit: depositVal },
+        });
+      } else {
+        const flat = await prisma.flat.findUnique({ where: { id: targetTenant.flatId } });
+        await prisma.lease.create({
+          data: {
+            flatId: targetTenant.flatId,
+            tenantId: targetTenant.id,
+            startDate: targetTenant.moveInDate || new Date(),
+            monthlyRent: flat?.baseRent || 0,
+            monthlyLiftFee: flat?.liftFee || 0,
+            securityDeposit: depositVal,
+            status: 'ACTIVE',
+          },
+        });
+      }
+    }
 
     await prisma.auditLog.create({
       data: {

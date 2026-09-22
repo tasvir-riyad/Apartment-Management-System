@@ -30,14 +30,20 @@ A modern, production-grade, full-stack **Apartment and Property Management Syste
 
 ### 4. 💳 Rent Billing, Invoicing & Receipts
 - Automated monthly bill generation with partial payment support, balance roll-forward, and advance deduction.
+- **Advance Given (অগ্রিম জামানত) Tracking:** Record security deposits/advance amounts per tenant, displayed live on unit cards, and automatically purged when a tenant vacates.
 - **Printable Money Receipts (মানি রসিদ):** High-resolution, professional receipts with printable styling, breakdown of charges, and automated Bengali in-words conversion (কথায় টাকা).
 
-### 5. 👥 Resident / Tenant Portal
+### 5. 🔒 Enhanced Security & Re-Authentication
+- **Manual Admin Authentication:** Secure login requiring manual credential entry with autofill disabled and no demo shortcuts.
+- **Re-Authentication for Modifications:** Any critical data modification in the Admin Portal (rent updates, lift fee adjustments, extra charges, bill generation, due clearing, tenant & NID updates, and tenant vacating) requires entering the admin password again to confirm changes.
+- **Dedicated Verification API (`/api/auth/verify-password`):** Secure server-side bcrypt re-validation guarding against unauthorized or accidental state changes.
+
+### 6. 👥 Resident / Tenant Portal
 - Frictionless login using flat code (e.g., `B2`, `C1`, `D2`).
 - Real-time ledger view: rent breakdown, lift charges, extra utility bills, payment history, and downloadable PDF receipts.
 - Payment notice submission and digital maintenance requests.
 
-### 6. 🌐 Seamless Bilingual Support
+### 7. 🌐 Seamless Bilingual Support
 - Built-in dynamic language switcher for **বাংলা (Bengali)** and **English**.
 - Bengali typography powered by `Hind Siliguri` and English powered by `Inter`.
 

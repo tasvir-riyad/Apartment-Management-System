@@ -12,8 +12,8 @@ export default function LoginPage() {
   const { lang, t } = useLanguage();
   const router = useRouter();
 
-  const [identifier, setIdentifier] = useState('SayediTower');
-  const [password, setPassword] = useState('Enam6053@#');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -45,12 +45,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickFill = () => {
-    setIdentifier('SayediTower');
-    setPassword('Enam6053@#');
-    setError('');
-  };
-
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans">
       <Navbar />
@@ -75,7 +69,7 @@ export default function LoginPage() {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleLogin} className="p-6 sm:p-8 space-y-4 sm:space-y-5">
+          <form onSubmit={handleLogin} autoComplete="off" className="p-6 sm:p-8 space-y-4 sm:space-y-5">
             {error && (
               <div className="p-3 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-xl">
                 {error}
@@ -93,9 +87,10 @@ export default function LoginPage() {
                 <input
                   type="text"
                   required
+                  autoComplete="off"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="SayediTower"
+                  placeholder="অ্যাডমিন ইউজারনেম লিখুন"
                   className="w-full pl-10 pr-3.5 py-2.5 min-h-[44px] bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
                 />
               </div>
@@ -110,9 +105,10 @@ export default function LoginPage() {
                 <input
                   type="password"
                   required
+                  autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder="অ্যাডমিন পাসওয়ার্ড লিখুন"
                   className="w-full pl-10 pr-3.5 py-2.5 min-h-[44px] bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
                 />
               </div>
@@ -133,17 +129,6 @@ export default function LoginPage() {
                 </>
               )}
             </button>
-
-            {/* Quick Demo Autofill Button */}
-            <div className="pt-3 border-t border-slate-200">
-              <button
-                type="button"
-                onClick={handleQuickFill}
-                className="w-full py-2 px-3 text-xs font-bold rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition cursor-pointer flex items-center justify-center gap-2"
-              >
-                <span>স্বয়ংক্রিয় তথ্য পূরণ (SayediTower / Enam6053@#)</span>
-              </button>
-            </div>
 
             <div className="text-center pt-2">
               <Link

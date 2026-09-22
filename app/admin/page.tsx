@@ -20,6 +20,7 @@ import {
   DollarSign,
   Phone,
   ShieldCheck,
+  Lock,
   FileText,
   CheckSquare,
   Square,
@@ -147,6 +148,7 @@ export default function AdminDashboardPage() {
     occupation: '',
     permanentAddress: '',
     familyMembersCount: 1,
+    advanceAmount: '',
     moveInDate: '',
     isActive: true,
   });
@@ -155,6 +157,66 @@ export default function AdminDashboardPage() {
   const [occupancyConfirmModalOpen, setOccupancyConfirmModalOpen] = useState(false);
   const [targetTenantForOccupancy, setTargetTenantForOccupancy] = useState<any>(null);
   const [newOccupancyState, setNewOccupancyState] = useState<boolean>(true);
+
+  // 9. Admin Password Verification Modal for Confirming Any Changes
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
+  const [passwordVerificationError, setPasswordVerificationError] = useState('');
+  const [isVerifyingPassword, setIsVerifyingPassword] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{
+    title: string;
+    description: string;
+    execute: () => Promise<void>;
+  } | null>(null);
+
+  const triggerActionWithPasswordConfirmation = (
+    title: string,
+    description: string,
+    execute: () => Promise<void>
+  ) => {
+    setPendingAction({ title, description, execute });
+    setConfirmPasswordInput('');
+    setPasswordVerificationError('');
+    setPasswordModalOpen(true);
+  };
+
+  const handleVerifyPasswordAndExecute = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!confirmPasswordInput) {
+      setPasswordVerificationError('অনুগ্রহ করে অ্যাডমিন পাসওয়ার্ড লিখুন');
+      return;
+    }
+
+    setIsVerifyingPassword(true);
+    setPasswordVerificationError('');
+
+    try {
+      const res = await fetch('/api/auth/verify-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: confirmPasswordInput }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setPasswordVerificationError(data.error || 'ভুল পাসওয়ার্ড! সঠিক পাসওয়ার্ড দিয়ে নিশ্চিত করুন।');
+        setIsVerifyingPassword(false);
+        return;
+      }
+
+      if (pendingAction) {
+        const actionToRun = pendingAction.execute;
+        setPasswordModalOpen(false);
+        setPendingAction(null);
+        setConfirmPasswordInput('');
+        await actionToRun();
+      }
+    } catch (err: any) {
+      setPasswordVerificationError('সার্ভারে যোগাযোগ করা সম্ভব হয়নি');
+    } finally {
+      setIsVerifyingPassword(false);
+    }
+  };
 
   // Load initial data
   const fetchData = async () => {
@@ -220,26 +282,32 @@ export default function AdminDashboardPage() {
     e.preventDefault();
     if (!targetRentFlat) return;
 
-    try {
-      const res = await fetch('/api/flats', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: targetRentFlat.id, baseRent: Number(newBaseRent) }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setRentEditModalOpen(false);
-        setActionSuccess(
-          `ফ্ল্যাট ${targetRentFlat.code} এর মূল ভাড়া ৳${Number(newBaseRent).toLocaleString('en-IN')} এ সফলভাবে হালনাগাদ করা হয়েছে এবং মূল ওয়েবসাইটে সঙ্গে সঙ্গে পরিবর্তিত হয়েছে।`
-        );
-        fetchData();
-        setTimeout(() => setActionSuccess(''), 6000);
-      } else {
-        alert(data.error || 'ভাড়া পরিবর্তন ব্যর্থ হয়েছে');
+    triggerActionWithPasswordConfirmation(
+      'মূল ভাড়া পরিবর্তন নিশ্চিতকরণ',
+      `ফ্ল্যাট ${targetRentFlat.code} এর মূল ভাড়া ৳${Number(newBaseRent).toLocaleString('en-IN')} এ নির্ধারণ করতে অ্যাডমিন পাসওয়ার্ড দিন।`,
+      async () => {
+        try {
+          const res = await fetch('/api/flats', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: targetRentFlat.id, baseRent: Number(newBaseRent) }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setRentEditModalOpen(false);
+            setActionSuccess(
+              `ফ্ল্যাট ${targetRentFlat.code} এর মূল ভাড়া ৳${Number(newBaseRent).toLocaleString('en-IN')} এ সফলভাবে হালনাগাদ করা হয়েছে এবং মূল ওয়েবসাইটে সঙ্গে সঙ্গে পরিবর্তিত হয়েছে।`
+            );
+            fetchData();
+            setTimeout(() => setActionSuccess(''), 6000);
+          } else {
+            alert(data.error || 'ভাড়া পরিবর্তন ব্যর্থ হয়েছে');
+          }
+        } catch (e) {
+          alert('সার্ভারে যোগাযোগ করা সম্ভব হয়নি');
+        }
       }
-    } catch (e) {
-      alert('সার্ভারে যোগাযোগ করা সম্ভব হয়নি');
-    }
+    );
   };
 
   // Handler: Save Single Lift Fee
@@ -247,23 +315,29 @@ export default function AdminDashboardPage() {
     e.preventDefault();
     if (!targetLiftFlat) return;
 
-    try {
-      const res = await fetch(`/api/flats/${targetLiftFlat.id}/lift-fee`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ liftFee: Number(singleLiftFee) }),
-      });
-      if (res.ok) {
-        setLiftEditModalOpen(false);
-        setActionSuccess(`ফ্ল্যাট ${targetLiftFlat.code} এর লিফট ফি ৳${Number(singleLiftFee).toLocaleString('en-IN')} নির্ধারণ করা হয়েছে।`);
-        fetchData();
-        setTimeout(() => setActionSuccess(''), 5000);
-      } else {
-        alert('লিফট ফি সংরক্ষণ করা যায়নি');
+    triggerActionWithPasswordConfirmation(
+      'একক লিফট ফি পরিবর্তন নিশ্চিতকরণ',
+      `ফ্ল্যাট ${targetLiftFlat.code} এর লিফট ফি ৳${Number(singleLiftFee).toLocaleString('en-IN')} নির্ধারণ করতে অ্যাডমিন পাসওয়ার্ড দিন।`,
+      async () => {
+        try {
+          const res = await fetch(`/api/flats/${targetLiftFlat.id}/lift-fee`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ liftFee: Number(singleLiftFee) }),
+          });
+          if (res.ok) {
+            setLiftEditModalOpen(false);
+            setActionSuccess(`ফ্ল্যাট ${targetLiftFlat.code} এর লিফট ফি ৳${Number(singleLiftFee).toLocaleString('en-IN')} নির্ধারণ করা হয়েছে।`);
+            fetchData();
+            setTimeout(() => setActionSuccess(''), 5000);
+          } else {
+            alert('লিফট ফি সংরক্ষণ করা যায়নি');
+          }
+        } catch (e) {
+          alert('ত্রুটি হয়েছে');
+        }
       }
-    } catch (e) {
-      alert('ত্রুটি হয়েছে');
-    }
+    );
   };
 
   // Handler: Apply Bulk / Selected Lift Fee
@@ -274,29 +348,35 @@ export default function AdminDashboardPage() {
       return;
     }
 
-    try {
-      const res = await fetch('/api/flats/lift-fee/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode: bulkLiftMode,
-          flatIds: bulkLiftMode === 'SELECTED' ? selectedLiftFlatIds : undefined,
-          liftFee: Number(bulkLiftFee),
-          action: bulkLiftAction,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSelectedLiftFlatIds([]);
-        setActionSuccess(data.message);
-        fetchData();
-        setTimeout(() => setActionSuccess(''), 6000);
-      } else {
-        alert(data.error || 'লিফট চার্জ প্রয়োগ ব্যর্থ হয়েছে');
+    triggerActionWithPasswordConfirmation(
+      'সার্বিক লিফট ফি প্রয়োগ নিশ্চিতকরণ',
+      `এককালীন লিফট ফি ৳${Number(bulkLiftFee).toLocaleString('en-IN')} প্রয়োগ করতে অ্যাডমিন পাসওয়ার্ড দিন।`,
+      async () => {
+        try {
+          const res = await fetch('/api/flats/lift-fee/batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mode: bulkLiftMode,
+              flatIds: bulkLiftMode === 'SELECTED' ? selectedLiftFlatIds : undefined,
+              liftFee: Number(bulkLiftFee),
+              action: bulkLiftAction,
+            }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setSelectedLiftFlatIds([]);
+            setActionSuccess(data.message);
+            fetchData();
+            setTimeout(() => setActionSuccess(''), 6000);
+          } else {
+            alert(data.error || 'লিফট চার্জ প্রয়োগ ব্যর্থ হয়েছে');
+          }
+        } catch (e) {
+          alert('সার্ভারে সংযোগে ত্রুটি');
+        }
       }
-    } catch (e) {
-      alert('সার্ভারে সংযোগে ত্রুটি');
-    }
+    );
   };
 
   // Handler: Apply Extra / Hidden Charge
@@ -307,30 +387,36 @@ export default function AdminDashboardPage() {
       return;
     }
 
-    try {
-      const res = await fetch('/api/charges/extra', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode: extraChargeMode,
-          flatIds: extraChargeMode === 'SELECTED' ? selectedExtraFlatIds : undefined,
-          amount: Number(extraChargeAmount),
-          label: extraChargeLabel,
-          category: 'SERVICE',
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSelectedExtraFlatIds([]);
-        setActionSuccess(data.message);
-        fetchData();
-        setTimeout(() => setActionSuccess(''), 6000);
-      } else {
-        alert(data.error || 'অতিরিক্ত চার্জ প্রয়োগ ব্যর্থ হয়েছে');
+    triggerActionWithPasswordConfirmation(
+      'অতিরিক্ত চার্জ যোগ করার নিশ্চিতকরণ',
+      `চার্জ "${extraChargeLabel}" (৳${Number(extraChargeAmount).toLocaleString('en-IN')}) প্রয়োগ করতে অ্যাডমিন পাসওয়ার্ড দিন।`,
+      async () => {
+        try {
+          const res = await fetch('/api/charges/extra', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mode: extraChargeMode,
+              flatIds: extraChargeMode === 'SELECTED' ? selectedExtraFlatIds : undefined,
+              amount: Number(extraChargeAmount),
+              label: extraChargeLabel,
+              category: 'SERVICE',
+            }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setSelectedExtraFlatIds([]);
+            setActionSuccess(data.message);
+            fetchData();
+            setTimeout(() => setActionSuccess(''), 6000);
+          } else {
+            alert(data.error || 'অতিরিক্ত চার্জ প্রয়োগ ব্যর্থ হয়েছে');
+          }
+        } catch (e) {
+          alert('সার্ভারে সংযোগে ত্রুটি');
+        }
       }
-    } catch (e) {
-      alert('সার্ভারে সংযোগে ত্রুটি');
-    }
+    );
   };
 
   // Handler: Open Bill Report Modal for a specific flat
@@ -404,29 +490,37 @@ export default function AdminDashboardPage() {
   // Handler: Submit Bill & Generate Receipt
   const handleGenerateCustomBillAndReceipt = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const res = await fetch('/api/bills/generate-receipt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(billForm),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setBillReportModalOpen(false);
-        setActionSuccess(`বিল রিপোর্ট ও অফিসিয়াল মানি রিসিট সফলভাবে তৈরি হয়েছে! রসিদ নং: ${data.receiptNo}`);
-        const receiptRes = await fetch(`/api/receipts/${data.receiptNo}`);
-        const receiptJson = await receiptRes.json();
-        if (receiptJson.success) {
-          setSelectedReceipt(receiptJson.receipt);
+    const targetFlat = serialFlats.find((f: any) => f.id === billForm.flatId);
+
+    triggerActionWithPasswordConfirmation(
+      'বিল ও অফিসিয়াল রিসিট তৈরি নিশ্চিতকরণ',
+      `ফ্ল্যাট ${targetFlat?.code || ''} এর জন্য ৳${Number(billForm.paidAmount).toLocaleString('en-IN')} জমার অফিসিয়াল রিসিট অনুমোদনে অ্যাডমিন পাসওয়ার্ড দিন।`,
+      async () => {
+        try {
+          const res = await fetch('/api/bills/generate-receipt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(billForm),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setBillReportModalOpen(false);
+            setActionSuccess(`বিল রিপোর্ট ও অফিসিয়াল মানি রিসিট সফলভাবে তৈরি হয়েছে! রসিদ নং: ${data.receiptNo}`);
+            const receiptRes = await fetch(`/api/receipts/${data.receiptNo}`);
+            const receiptJson = await receiptRes.json();
+            if (receiptJson.success) {
+              setSelectedReceipt(receiptJson.receipt);
+            }
+            fetchData();
+            setTimeout(() => setActionSuccess(''), 6000);
+          } else {
+            alert(data.error || 'রসিদ তৈরিতে সমস্যা হয়েছে');
+          }
+        } catch (e) {
+          alert('সার্ভারে যোগাযোগ করা যায়নি');
         }
-        fetchData();
-        setTimeout(() => setActionSuccess(''), 6000);
-      } else {
-        alert(data.error || 'রসিদ তৈরিতে সমস্যা হয়েছে');
       }
-    } catch (e) {
-      alert('সার্ভারে যোগাযোগ করা যায়নি');
-    }
+    );
   };
 
   // Handler: Open Due Clear Modal
@@ -446,35 +540,44 @@ export default function AdminDashboardPage() {
     e.preventDefault();
     if (!targetDueFlat) return;
 
-    try {
-      const res = await fetch('/api/dues/clear', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          flatId: targetDueFlat.id,
-          action: dueClearAction,
-          amount: dueClearAction === 'PARTIAL' ? Number(partialPayAmount) : undefined,
-          note: dueClearNote,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setDueClearModalOpen(false);
-        setActionSuccess(data.message);
-        fetchData();
-        setTimeout(() => setActionSuccess(''), 5000);
-      } else {
-        alert(data.error || 'বকেয়া পরিশোধ ব্যর্থ হয়েছে');
+    const actionText = dueClearAction === 'CLEAR_ALL' ? 'সম্পূর্ণ বকেয়া পরিশোধ' : `আংশিক ৳${Number(partialPayAmount).toLocaleString('en-IN')} পরিশোধ`;
+
+    triggerActionWithPasswordConfirmation(
+      'বকেয়া সমন্বয় ও ক্যাশ পরিশোধ নিশ্চিতকরণ',
+      `ফ্ল্যাট ${targetDueFlat.code} এর ${actionText} নিশ্চিত করতে অ্যাডমিন পাসওয়ার্ড দিন।`,
+      async () => {
+        try {
+          const res = await fetch('/api/dues/clear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              flatId: targetDueFlat.id,
+              action: dueClearAction,
+              amount: dueClearAction === 'PARTIAL' ? Number(partialPayAmount) : undefined,
+              note: dueClearNote,
+            }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setDueClearModalOpen(false);
+            setActionSuccess(data.message);
+            fetchData();
+            setTimeout(() => setActionSuccess(''), 5000);
+          } else {
+            alert(data.error || 'বকেয়া পরিশোধ ব্যর্থ হয়েছে');
+          }
+        } catch (e) {
+          alert('সার্ভারে সমস্যা হয়েছে');
+        }
       }
-    } catch (e) {
-      alert('সার্ভারে সমস্যা হয়েছে');
-    }
+    );
   };
 
   // Handler: Open Tenant Edit Modal
   const openTenantEditModal = (flat: any) => {
     const activeLease = flat.leases?.find((l: any) => l.status === 'ACTIVE' && l.tenant?.isActive);
     const existingTenant = activeLease?.tenant || tenants.find((t: any) => t.flatId === flat.id && t.isActive);
+    const existingAdvance = activeLease?.securityDeposit ?? existingTenant?.leases?.[0]?.securityDeposit;
 
     if (existingTenant && existingTenant.isActive) {
       setTenantEditForm({
@@ -489,6 +592,7 @@ export default function AdminDashboardPage() {
         occupation: existingTenant.occupation || '',
         permanentAddress: existingTenant.permanentAddress || '',
         familyMembersCount: existingTenant.familyMembersCount || 1,
+        advanceAmount: existingAdvance !== undefined && existingAdvance !== null && existingAdvance !== 0 ? String(existingAdvance) : (existingAdvance === 0 ? '0' : ''),
         moveInDate: existingTenant.moveInDate ? new Date(existingTenant.moveInDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
         isActive: true,
       });
@@ -506,6 +610,7 @@ export default function AdminDashboardPage() {
         occupation: '',
         permanentAddress: '',
         familyMembersCount: 1,
+        advanceAmount: '',
         moveInDate: new Date().toISOString().slice(0, 10),
         isActive: true,
       });
@@ -516,24 +621,31 @@ export default function AdminDashboardPage() {
   // Handler: Save Tenant & NID Details
   const handleSaveTenantDetails = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const res = await fetch('/api/tenants', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(tenantEditForm),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setTenantEditModalOpen(false);
-        setActionSuccess(`ফ্ল্যাট ${tenantEditForm.flatCode} এর ভাড়াটিয়া ও এনআইডি তথ্য সফলভাবে সংরক্ষিত হয়েছে।`);
-        fetchData();
-        setTimeout(() => setActionSuccess(''), 5000);
-      } else {
-        alert(data.error || 'ভাড়াটিয়ার তথ্য সংরক্ষণ ব্যর্থ হয়েছে');
+
+    triggerActionWithPasswordConfirmation(
+      'ভাড়াটিয়া ও এনআইডি তথ্য সংরক্ষণ নিশ্চিতকরণ',
+      `ফ্ল্যাট ${tenantEditForm.flatCode} এর ভাড়াটিয়া ও এনআইডি বিবরণ সংরক্ষণ করতে অ্যাডমিন পাসওয়ার্ড দিন।`,
+      async () => {
+        try {
+          const res = await fetch('/api/tenants', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(tenantEditForm),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setTenantEditModalOpen(false);
+            setActionSuccess(`ফ্ল্যাট ${tenantEditForm.flatCode} এর ভাড়াটিয়া ও এনআইডি তথ্য সফলভাবে সংরক্ষিত হয়েছে।`);
+            fetchData();
+            setTimeout(() => setActionSuccess(''), 5000);
+          } else {
+            alert(data.error || 'ভাড়াটিয়ার তথ্য সংরক্ষণ ব্যর্থ হয়েছে');
+          }
+        } catch (e) {
+          alert('সার্ভারে সমস্যা হয়েছে');
+        }
       }
-    } catch (e) {
-      alert('সার্ভারে সমস্যা হয়েছে');
-    }
+    );
   };
 
   // Handler: Trigger Double Confirmation for "উঠা / নামা"
@@ -548,55 +660,68 @@ export default function AdminDashboardPage() {
   const executeOccupancyChange = async () => {
     if (!targetTenantForOccupancy) return;
 
-    try {
-      if (!newOccupancyState) {
-        // Admin clicked "নামা" (Vacate): Send DELETE request to completely remove stored tenant data
-        const res = await fetch('/api/tenants', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tenantId: targetTenantForOccupancy.id,
-            flatId: targetTenantForOccupancy.flatId,
-          }),
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setOccupancyConfirmModalOpen(false);
-          setActionSuccess(
-            `ফ্ল্যাট ${targetTenantForOccupancy.flat?.code || targetTenantForOccupancy.flatCode || ''} এর পূর্ববর্তী ভাড়াটিয়ার সংরক্ষিত সমস্ত তথ্য মুছে ফেলা হয়েছে এবং ফ্ল্যাটটি খালি করা হয়েছে। এখন নতুন ভাড়াটিয়ার তথ্য হালনাগাদ করা যাবে।`
-          );
-          fetchData();
-          setTimeout(() => setActionSuccess(''), 6000);
-        } else {
-          alert(data.error || 'স্ট্যাটাস পরিবর্তন ব্যর্থ হয়েছে');
-        }
-      } else {
-        // "উঠা" (Re-occupy)
-        const res = await fetch('/api/tenants', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tenantId: targetTenantForOccupancy.id,
-            flatId: targetTenantForOccupancy.flatId,
-            isActive: true,
-            moveInDate: new Date().toISOString(),
-          }),
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setOccupancyConfirmModalOpen(false);
-          setActionSuccess(
-            `ফ্ল্যাট ${targetTenantForOccupancy.flat?.code || targetTenantForOccupancy.flatCode || ''} এর ভাড়াটিয়ার স্ট্যাটাস সফলভাবে 'উঠা (বর্তমান)' হিসেবে সক্রিয় করা হয়েছে।`
-          );
-          fetchData();
-          setTimeout(() => setActionSuccess(''), 6000);
-        } else {
-          alert(data.error || 'স্ট্যাটাস পরিবর্তন ব্যর্থ হয়েছে');
+    const isVacating = !newOccupancyState;
+    const flatCode = targetTenantForOccupancy.flat?.code || targetTenantForOccupancy.flatCode || '';
+    const actionTitle = isVacating ? 'ভাড়াটিয়া নামা ও তথ্য অপসারণ নিশ্চিতকরণ' : 'ভাড়াটিয়া উঠা নিশ্চিতকরণ';
+    const actionDesc = isVacating
+      ? `ফ্ল্যাট ${flatCode} এর পূর্ববর্তী ভাড়াটিয়ার সংরক্ষিত তথ্য ও অগ্রিম জামানত সম্পূর্ণ মুছে ফ্ল্যাটটি খালি (VACANT) করতে অ্যাডমিন পাসওয়ার্ড দিন।`
+      : `ফ্ল্যাট ${flatCode} এর ভাড়াটিয়ার স্ট্যাটাস 'উঠা (বর্তমান)' সক্রিয় করতে অ্যাডমিন পাসওয়ার্ড দিন।`;
+
+    triggerActionWithPasswordConfirmation(
+      actionTitle,
+      actionDesc,
+      async () => {
+        try {
+          if (!newOccupancyState) {
+            // Admin clicked "নামা" (Vacate): Send DELETE request to completely remove stored tenant data
+            const res = await fetch('/api/tenants', {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tenantId: targetTenantForOccupancy.id,
+                flatId: targetTenantForOccupancy.flatId,
+              }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+              setOccupancyConfirmModalOpen(false);
+              setActionSuccess(
+                `ফ্ল্যাট ${targetTenantForOccupancy.flat?.code || targetTenantForOccupancy.flatCode || ''} এর পূর্ববর্তী ভাড়াটিয়ার সংরক্ষিত সমস্ত তথ্য মুছে ফেলা হয়েছে এবং ফ্ল্যাটটি খালি করা হয়েছে। এখন নতুন ভাড়াটিয়ার তথ্য হালনাগাদ করা যাবে।`
+              );
+              fetchData();
+              setTimeout(() => setActionSuccess(''), 6000);
+            } else {
+              alert(data.error || 'স্ট্যাটাস পরিবর্তন ব্যর্থ হয়েছে');
+            }
+          } else {
+            // "উঠা" (Re-occupy)
+            const res = await fetch('/api/tenants', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tenantId: targetTenantForOccupancy.id,
+                flatId: targetTenantForOccupancy.flatId,
+                isActive: true,
+                moveInDate: new Date().toISOString(),
+              }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+              setOccupancyConfirmModalOpen(false);
+              setActionSuccess(
+                `ফ্ল্যাট ${targetTenantForOccupancy.flat?.code || targetTenantForOccupancy.flatCode || ''} এর ভাড়াটিয়ার স্ট্যাটাস সফলভাবে 'উঠা (বর্তমান)' হিসেবে সক্রিয় করা হয়েছে।`
+              );
+              fetchData();
+              setTimeout(() => setActionSuccess(''), 6000);
+            } else {
+              alert(data.error || 'স্ট্যাটাস পরিবর্তন ব্যর্থ হয়েছে');
+            }
+          }
+        } catch (e) {
+          alert('সার্ভারে সমস্যা হয়েছে');
         }
       }
-    } catch (e) {
-      alert('সার্ভারে সমস্যা হয়েছে');
-    }
+    );
   };
 
   // Handler: View Receipt
@@ -1476,6 +1601,15 @@ export default function AdminDashboardPage() {
                                       </strong>
                                     </div>
 
+                                    <div className="flex justify-between">
+                                      <span className="text-slate-500">অগ্রিম জামানত (Advance Given):</span>
+                                      <strong className="text-emerald-700 font-mono font-bold">
+                                        {(activeLease?.securityDeposit || tenant.leases?.[0]?.securityDeposit)
+                                          ? `৳${Number(activeLease?.securityDeposit || tenant.leases?.[0]?.securityDeposit).toLocaleString('en-IN')}`
+                                          : '—'}
+                                      </strong>
+                                    </div>
+
                                     {tenant.permanentAddress && (
                                       <div>
                                         <span className="text-slate-500 block text-[11px]">স্থায়ী ঠিকানা:</span>
@@ -1526,6 +1660,11 @@ export default function AdminDashboardPage() {
 
                                     <div className="flex justify-between">
                                       <span>ওঠার তারিখ (Move In):</span>
+                                      <strong className="text-slate-400">—</strong>
+                                    </div>
+
+                                    <div className="flex justify-between">
+                                      <span>অগ্রিম জামানত (Advance Given):</span>
                                       <strong className="text-slate-400">—</strong>
                                     </div>
 
@@ -1956,14 +2095,32 @@ export default function AdminDashboardPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">ওঠার তারিখ (Move In Date)</label>
-                <input
-                  type="date"
-                  value={tenantEditForm.moveInDate}
-                  onChange={(e) => setTenantEditForm({ ...tenantEditForm, moveInDate: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-blue-900 focus:outline-none"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    অগ্রিম জামানত (Advance Given - ৳)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="যেমন: ২০০০০"
+                    value={tenantEditForm.advanceAmount}
+                    onChange={(e) => setTenantEditForm({ ...tenantEditForm, advanceAmount: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold focus:bg-white focus:ring-2 focus:ring-blue-900 focus:outline-none"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">
+                    ভাড়াটিয়ার জামানত (ভাড়াটিয়া নামলে স্বয়ংক্রিয়ভাবে মুছে যাবে)
+                  </span>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">ওঠার তারিখ (Move In Date)</label>
+                  <input
+                    type="date"
+                    value={tenantEditForm.moveInDate}
+                    onChange={(e) => setTenantEditForm({ ...tenantEditForm, moveInDate: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-blue-900 focus:outline-none"
+                  />
+                </div>
               </div>
 
               <div className="pt-3 flex items-center gap-3">
@@ -2030,7 +2187,7 @@ export default function AdminDashboardPage() {
                     <span>পূর্ববর্তী তথ্য অপসারণের নোটিশ:</span>
                   </p>
                   <p className="text-slate-700 leading-relaxed">
-                    'নামা' নিশ্চিত করলে এই ফ্ল্যাটের পূর্বের ভাড়াটিয়ার সংরক্ষিত যাবতীয় তথ্য সম্পূর্ণভাবে মুছে ফেলা হবে এবং ফ্ল্যাটটি খালি (VACANT) হবে, যাতে পরবর্তীতে নতুন ভাড়াটিয়ার হালনাগাদ তথ্য ইনপুট দেওয়া যায়।
+                    'নামা' নিশ্চিত করলে এই ফ্ল্যাটের পূর্বের ভাড়াটিয়ার সংরক্ষিত যাবতীয় তথ্য ও অগ্রিম জামানত (Advance Given) সম্পূর্ণভাবে মুছে ফেলা হবে এবং ফ্ল্যাটটি খালি (VACANT) হবে, যাতে পরবর্তীতে নতুন ভাড়াটিয়ার হালনাগাদ তথ্য ইনপুট দেওয়া যায়।
                   </p>
                 </div>
               )}
@@ -2413,6 +2570,87 @@ export default function AdminDashboardPage() {
                 >
                   <Printer className="w-4 h-4 text-amber-300" />
                   <span>বিল সংরক্ষণ ও মানি রিসিট দেখুন</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* PASSWORD CONFIRMATION MODAL (CONFIRM ANY DATA CHANGE)                      */}
+      {/* ========================================================================= */}
+      {passwordModalOpen && pendingAction && (
+        <div className="fixed inset-0 z-[99] flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border-2 border-blue-900 animate-in fade-in zoom-in duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-blue-100 border border-blue-200 flex items-center justify-center mx-auto mb-4 text-blue-900">
+              <Lock className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-2 mb-5">
+              <span className="px-3 py-0.5 rounded-full font-black text-[11px] uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300">
+                নিরাপত্তা যাচাইকরণ (Security Confirmation)
+              </span>
+              <h3 className="text-lg font-black text-slate-900">
+                {pendingAction.title}
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200 font-medium">
+                {pendingAction.description}
+              </p>
+            </div>
+
+            <form onSubmit={handleVerifyPasswordAndExecute} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1.5 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-blue-900" />
+                  <span>তথ্য পরিবর্তন নিশ্চিত করতে অ্যাডমিন পাসওয়ার্ড দিন:</span>
+                </label>
+                <input
+                  type="password"
+                  autoFocus
+                  required
+                  value={confirmPasswordInput}
+                  onChange={(e) => {
+                    setConfirmPasswordInput(e.target.value);
+                    if (passwordVerificationError) setPasswordVerificationError('');
+                  }}
+                  placeholder="অ্যাডমিন পাসওয়ার্ড লিখুন"
+                  className="w-full px-3.5 py-2.5 bg-white border-2 border-slate-300 rounded-xl text-sm font-medium focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/20 min-h-[44px]"
+                />
+                {passwordVerificationError && (
+                  <p className="text-xs font-bold text-red-600 mt-2 bg-red-50 p-2 rounded-lg border border-red-200">
+                    {passwordVerificationError}
+                  </p>
+                )}
+              </div>
+
+              <div className="pt-2 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPasswordModalOpen(false);
+                    setPendingAction(null);
+                    setConfirmPasswordInput('');
+                    setPasswordVerificationError('');
+                  }}
+                  disabled={isVerifyingPassword}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold text-xs transition cursor-pointer min-h-[44px]"
+                >
+                  বাতিল
+                </button>
+                <button
+                  type="submit"
+                  disabled={isVerifyingPassword || !confirmPasswordInput}
+                  className="flex-1 py-2.5 bg-blue-900 hover:bg-blue-800 disabled:opacity-50 text-white rounded-xl font-black text-xs transition shadow-md cursor-pointer min-h-[44px] flex items-center justify-center gap-2"
+                >
+                  {isVerifyingPassword ? (
+                    <span>যাচাই হচ্ছে...</span>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4 text-amber-300" />
+                      <span>পাসওয়ার্ড দিয়ে নিশ্চিত করুন</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
